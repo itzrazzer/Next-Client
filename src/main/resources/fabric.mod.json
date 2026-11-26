@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "nextfam",
+  "version": "${version}",
+  "name": "NextFam Client",
+  "description": "Your HUD. Your Style. Your NextFam.",
+  "authors": ["NextFam"],
+  "license": "MIT",
+  "icon": "assets/nextfam/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["com.nextfam.NextFamClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.18.0",
+    "minecraft": "~1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}
