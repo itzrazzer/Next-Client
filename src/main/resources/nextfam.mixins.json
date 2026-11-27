@@ -1,0 +1,19 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.nextfam.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "GameRendererMixin",
+    "SplashOverlayMixin",
+    "HandledScreenAccessor",
+    "EntityMixin",
+    "CameraMixin",
+    "InGameHudMixin",
+    "OverlayTextureAccessor",
+    "HeldItemRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}
