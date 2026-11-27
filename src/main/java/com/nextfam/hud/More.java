@@ -73,6 +73,7 @@ public final class More {
         l.add(new NoPumpkin());
         l.add(new ShulkerPreview());
         V4.register(l);
+        Cosmetics.register(l);
 
         Map<String, Item> m = new HashMap<>();
         m.put("invhud", Items.CHEST); m.put("itemcounter", Items.HOPPER); m.put("potioncounter", Items.SPLASH_POTION);
@@ -83,12 +84,13 @@ public final class More {
         m.put("damagetint", Items.REDSTONE_BLOCK); m.put("zoom", Items.SPYGLASS); m.put("customfov", Items.ENDER_EYE);
         m.put("particles", Items.FIREWORK_STAR); m.put("weather", Items.WATER_BUCKET); m.put("freelook", Items.COMPASS);
         m.put("snaplook", Items.ENDER_PEARL); m.put("nopumpkin", Items.CARVED_PUMPKIN); m.put("shulker", Items.SHULKER_BOX);
-        m.put("autogg", Items.WRITABLE_BOOK); m.put("quickchat", Items.NAME_TAG); m.put("hitcolor", Items.RED_DYE); m.put("anim17", Items.WOODEN_SWORD);
+        m.put("autogg", Items.WRITABLE_BOOK); m.put("pingeq", Items.NOTE_BLOCK); m.put("wings", Items.ELYTRA); m.put("capemod", Items.WHITE_BANNER); m.put("nflogo", Items.NETHER_STAR); m.put("quickchat", Items.NAME_TAG); m.put("hitcolor", Items.RED_DYE); m.put("anim17", Items.WOODEN_SWORD);
         for (int i = n; i < l.size(); i++) {
             HudElement e = l.get(i);
             e.enabled = false; e.defEnabled = false; e.shown.set(0f);
             Item it = m.get(e.id); if (it != null) e.icon = it;
         }
+        for (HudElement e : l) if (e.id.equals("hitboxes") || e.id.equals("nflogo") || e.id.equals("pingeq")) { e.enabled = e.id.equals("pingeq") ? false : true; e.defEnabled = e.enabled; e.shown.set(e.enabled ? 1f : 0f); }
     }
 
     /** Preview isi shulker box saat kursor di atas item (layar inventory). */
@@ -113,7 +115,7 @@ public final class More {
             int x = Math.min(mx + 12, s.width - w - 2), y = Math.min(my - h - 4 < 2 ? my + 14 : my - h - 4, s.height - h - 2);
             var tr = Modules.mc().textRenderer;
             Draw.rrect(ctx, x, y, w, h, 4, 0xEE101014);
-            Draw.rborder(ctx, x, y, w, h, 4, 1, 0xFFA855F7);
+            Draw.rborder(ctx, x, y, w, h, 4, 1, 0xFFFFFFFF);
             for (int i = 0; i < items.size(); i++) {
                 int ix = x + 4 + (i % 9) * 18, iy = y + 4 + (i / 9) * 18;
                 ItemStack st = items.get(i);
@@ -225,26 +227,39 @@ public final class More {
     }
 
     static class EnchantHud extends HudElement {
-        EnchantHud() { super("enchants", "Enchantment Display", "Inventory", "Enchantments of the item in your hand", 6, 390); }
+        private Item lastItem; private String lastKey = ""; private long showStart; private List<String> cache = new ArrayList<>(); private long cacheT;
+        EnchantHud() { super("enchants", "Enchantment Display", "Inventory", "Shows enchant names and levels under the item name when you switch to an enchanted item", -1, -2); align.idx = 1; }
         private List<String> lines() {
+            long now = System.currentTimeMillis();
+            if (now - cacheT < 200) return cache;
+            cacheT = now;
             List<String> out = new ArrayList<>(); var p = Modules.mc().player;
             if (p != null) {
                 ItemStack s = p.getMainHandStack();
                 add(out, s.get(DataComponentTypes.ENCHANTMENTS));
                 add(out, s.get(DataComponentTypes.STORED_ENCHANTMENTS));
+                String key = s.isEmpty() ? "" : s.getItem() + "|" + String.join(",", out);
+                if (!key.equals(lastKey)) { lastKey = key; if (!out.isEmpty()) showStart = now; }
             }
-            if (out.isEmpty() && HudManager.editing) out.add("Sharpness V");
+            cache = out;
             return out;
         }
         private static void add(List<String> out, ItemEnchantmentsComponent c) {
             if (c == null) return;
             for (var e : c.getEnchantmentEntries()) out.add(Enchantment.getName(e.getKey(), e.getIntValue()).getString());
         }
-        @Override public boolean visible() { return !lines().isEmpty(); }
-        @Override protected int cw() { int w = 40; for (String s : lines()) w = Math.max(w, tr().getWidth(s)); return w; }
-        @Override protected int ch() { return Math.max(9, lines().size() * 10 - 1); }
+        private float fade() {
+            if (HudManager.editing) return 1f;
+            long age = System.currentTimeMillis() - showStart;
+            return age < 2500 ? 1f : age < 3000 ? 1f - (age - 2500) / 500f : 0f;
+        }
+        @Override public boolean visible() { List<String> l = lines(); return HudManager.editing || (!l.isEmpty() && fade() > 0.01f); }
+        @Override public float extraAlpha() { return fade(); }
+        @Override protected int cw() { int w = 50; for (String s : sample()) w = Math.max(w, tr().getWidth(s)); return w; }
+        @Override protected int ch() { return Math.max(9, sample().size() * 10 - 1); }
+        private List<String> sample() { List<String> l = lines(); if (l.isEmpty() && HudManager.editing) return List.of("Sharpness V", "Unbreaking III"); return l; }
         @Override protected void content(DrawContext ctx, int x, int y, int w) {
-            int i = 0; for (String s : lines()) { textA(ctx, s, x, y + i * 10, w, textColor.c); i++; }
+            int i = 0; for (String s : sample()) { textA(ctx, s, x, y + i * 10, w, 0xFFF0F0F0); i++; }
         }
     }
 
@@ -265,26 +280,31 @@ public final class More {
     // ================= overlay dunia =================
     static class Hitboxes extends Extras.OverlayModule {
         final Setting range = extra(Setting.num("range", "Max Distance", 24f, 4f, 64f).step(1f));
+        final Setting maxN = extra(Setting.num("maxN", "Max Entities", 40f, 5f, 120f).step(1f));
         final Setting thick = extra(Setting.num("thick", "Thickness", 1f, 1f, 3f).step(1f));
         final Setting playerCol = extra(Setting.color("playerCol", "Player Color", 0xFFF87171));
         final Setting mobCol = extra(Setting.color("mobCol", "Mob Color", 0xFFFACC15));
-        Hitboxes() { super("hitboxes", "Hitbox Visualizer", "Visual", "Draws entity hitboxes (2D overlay)"); }
+        Hitboxes() { super("hitboxes", "Hitbox Visualizer", "Visual", "Draws entity hitboxes (lightweight 2D overlay)"); }
         @Override public void worldRender(DrawContext ctx, int sw, int sh, float tp) {
             var mc = Modules.mc();
             if (!Proj.ready || mc.world == null || mc.player == null) return;
-            double r2 = range.f * range.f;
+            double r2 = range.f * range.f; int limit = Math.round(maxN.f), n = 0;
             for (Entity e : mc.world.getEntities()) {
                 if (e == mc.player || !(e instanceof LivingEntity || e instanceof EndCrystalEntity)) continue;
                 if (e.squaredDistanceTo(mc.player) > r2) continue;
                 Vec3d lp = e.getLerpedPos(tp);
+                double[] c = Proj.cam(lp.x, lp.y + e.getHeight() / 2.0, lp.z);
+                if (c[2] < -2.0) continue;                                  // di belakang kamera
+                if (c[2] > 0.1 && Math.abs(c[0] / c[2]) > 2.2) continue;     // jauh di luar layar
                 Box b = e.getBoundingBox().offset(lp.x - e.getX(), lp.y - e.getY(), lp.z - e.getZ());
                 Proj.box(ctx, b, e instanceof PlayerEntity ? playerCol.c : mobCol.c, Math.round(thick.f));
+                if (++n >= limit) break;
             }
         }
     }
 
     static class ChunkBorder extends Extras.OverlayModule {
-        final Setting color = extra(Setting.color("color", "Color", 0xFF22D3EE));
+        final Setting color = extra(Setting.color("color", "Color", 0xFFE0E0E0));
         ChunkBorder() { super("chunkborder", "Chunk Border", "Visual", "Chunk borders around you (2D overlay)"); }
         @Override public void worldRender(DrawContext ctx, int sw, int sh, float tp) {
             var mc = Modules.mc(); var p = mc.player;

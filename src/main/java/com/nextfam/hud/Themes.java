@@ -17,10 +17,10 @@ public final class Themes {
         ALL.put("NextFam", Themes::base);
         ALL.put("Lunar Inspired", e -> { base(e); e.setC("bgColor", 0x80000000); e.setF("radius", 2f); });
         ALL.put("Minimal", e -> { base(e); e.setB("bg", false); });
-        ALL.put("Modern", e -> { base(e); e.setC("bgColor", 0xCC111118); e.setB("border", true); e.setC("borderColor", 0xFFA855F7); e.setF("radius", 5f); e.setF("pad", 5f); });
+        ALL.put("Modern", e -> { base(e); e.setC("bgColor", 0xCC111118); e.setB("border", true); e.setC("borderColor", 0xFFFFFFFF); e.setF("radius", 5f); e.setF("pad", 5f); });
         ALL.put("Compact", e -> { base(e); e.setC("bgColor", 0x99000000); e.setF("pad", 1f); e.setF("radius", 0f); });
         ALL.put("Glass", e -> { base(e); e.setC("bgColor", 0x44FFFFFF); e.setB("border", true); e.setC("borderColor", 0x88FFFFFF); e.setF("radius", 6f); });
-        ALL.put("Neon", e -> { base(e); e.setC("bgColor", 0xCC0A0A12); e.setB("border", true); e.setC("borderColor", 0xFFC084FC); e.setB("glow", true); e.setC("textColor", 0xFFE9D5FF); e.setF("radius", 4f); });
+        ALL.put("Neon", e -> { base(e); e.setC("bgColor", 0xCC0A0A12); e.setB("border", true); e.setC("borderColor", 0xFFE5E5E5); e.setB("glow", true); e.setC("textColor", 0xFFF0F0F0); e.setF("radius", 4f); });
         ALL.put("Classic", e -> { base(e); e.setC("bgColor", 0x80000000); e.setF("radius", 0f); e.setF("pad", 3f); });
     }
 

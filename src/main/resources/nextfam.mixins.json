@@ -11,7 +11,14 @@
     "CameraMixin",
     "InGameHudMixin",
     "OverlayTextureAccessor",
-    "HeldItemRendererMixin"
+    "HeldItemRendererMixin",
+    "PlayerStateAccessor",
+    "EntityStateAccessor",
+    "LivingStateAccessor",
+    "PlayerEntityRendererMixin",
+    "LivingEntityRendererMixin",
+    "ClientWorldMixin",
+    "PlayerListHudMixin"
   ],
   "injectors": {
     "defaultRequire": 0

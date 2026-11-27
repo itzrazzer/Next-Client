@@ -25,6 +25,7 @@ public final class HudManager {
     public static void fit(HudElement e, int sw, int sh) {
         if (e.x == -1) e.x = (sw - e.sw()) / 2;
         if (e.y == -1) e.y = (sh - e.sh()) / 2;
+        if (e.y == -2) e.y = sh - 49;
         e.x = Math.max(0, Math.min(e.x, Math.max(0, sw - e.sw())));
         e.y = Math.max(0, Math.min(e.y, Math.max(0, sh - e.sh())));
     }
@@ -123,6 +124,7 @@ public final class HudManager {
 
     // ---------- simpan / muat ----------
     public static void saveAll() {
+        profCache = null;
         NfConfig.write("hud-layout.json", layoutJson());
         NfConfig.write("hud-settings.json", settingsJson());
         JsonObject p = new JsonObject(); p.add("layout", layoutJson()); p.add("settings", settingsJson());
@@ -134,15 +136,28 @@ public final class HudManager {
         NfConfig.load();
         applySettings(NfConfig.read("hud-settings.json"));
         applyLayout(NfConfig.read("hud-layout.json"));
+        if (NfConfig.ver < 5) {      // migrasi 5: nyalakan Hitbox Visualizer dan logo tag
+            for (String id : new String[]{"hitboxes", "nflogo"}) {
+                HudElement h = get(id);
+                if (h != null) { h.enabled = true; h.shown.set(1f); }
+            }
+            NfConfig.ver = 5;
+            saveAll();
+        }
     }
 
+    private static List<String> profCache; private static long profTime;
+
     public static List<String> profiles() {
+        long now = System.currentTimeMillis();
+        if (profCache != null && now - profTime < 3000) return profCache;
         List<String> l = new ArrayList<>();
         try (var st = Files.list(NfConfig.dir().resolve("profiles"))) {
             st.forEach(p -> { String n = p.getFileName().toString(); if (n.endsWith(".json")) l.add(n.substring(0, n.length() - 5)); });
         } catch (Exception ignored) {}
         if (!l.contains(NfConfig.profile)) l.add(NfConfig.profile);
         Collections.sort(l);
+        profCache = l; profTime = now;
         return l;
     }
 

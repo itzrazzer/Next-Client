@@ -18,7 +18,15 @@ public abstract class HudElement {
     public boolean enabled = true, locked = false;
     public float alphaMul = 1f;
     public boolean overlay = false;
-    public boolean defEnabled = true;              // modul tanpa posisi (efek dunia / tweak)
+    public boolean defEnabled = true;
+    protected boolean iconOk = false;
+    public final Setting showIcon = Setting.bool("showIcon", "Show Icon", true);
+    protected void enableIcon() { if (!iconOk) { iconOk = true; settings.add(showIcon); } }
+    protected boolean hasIcon() { return iconOk && showIcon.b; }
+    protected int iconW() { return hasIcon() ? 18 : 0; }
+
+    public record ExtraBtn(String label, boolean active, Runnable run) {}
+    public List<ExtraBtn> extraButtons() { return List.of(); }              // modul tanpa posisi (efek dunia / tweak)
     public Item icon = Items.PAPER;
     private ItemStack iconStack;
     public ItemStack iconStack() { if (iconStack == null) iconStack = new ItemStack(icon); return iconStack; }
@@ -33,13 +41,13 @@ public abstract class HudElement {
     public final Setting bg = add(Setting.bool("bg", "Background", true));
     public final Setting bgColor = add(Setting.color("bgColor", "Background Color", 0xAA16161C));
     public final Setting gradient = add(Setting.bool("gradient", "Gradient", false));
-    public final Setting bgColor2 = add(Setting.color("bgColor2", "Gradient Color", 0xAA7C3AED));
+    public final Setting bgColor2 = add(Setting.color("bgColor2", "Gradient Color", 0xAA8C8C8C));
     public final Setting textColor = add(Setting.color("textColor", "Text Color", 0xFFFFFFFF));
     public final Setting textShadow = add(Setting.bool("textShadow", "Text Shadow", true));
     public final Setting align = add(Setting.choice("align", "Alignment", 0, "Left", "Center", "Right"));
     public final Setting pad = add(Setting.num("pad", "Padding", 4f, 0f, 10f).step(1f));
     public final Setting border = add(Setting.bool("border", "Border", false));
-    public final Setting borderColor = add(Setting.color("borderColor", "Border Color", 0xFFA855F7));
+    public final Setting borderColor = add(Setting.color("borderColor", "Border Color", 0xFFFFFFFF));
     public final Setting borderW = add(Setting.num("borderW", "Border Width", 1f, 1f, 4f).step(1f));
     public final Setting radius = add(Setting.num("radius", "Corner Radius", 3f, 0f, 8f).step(1f));
     public final Setting shadow = add(Setting.bool("shadow", "Shadow", false));
@@ -63,8 +71,8 @@ public abstract class HudElement {
     public float extraAlpha() { return 1f; }
 
     public int padI() { return Math.round(pad.f); }
-    public int width() { return cw() + 2 * padI(); }
-    public int height() { return ch() + 2 * padI(); }
+    public int width() { return cw() + 2 * padI() + iconW(); }
+    public int height() { return Math.max(ch(), hasIcon() ? 16 : 0) + 2 * padI(); }
     public int sw() { return Math.round(width() * scale.f); }
     public int sh() { return Math.round(height() * scale.f); }
 
@@ -79,7 +87,8 @@ public abstract class HudElement {
             else Draw.rrect(ctx, 0, 0, w, h, r, a(bgColor.c));
         }
         if (border.b) Draw.rborder(ctx, 0, 0, w, h, r, Math.round(borderW.f), a(borderColor.c));
-        content(ctx, p, p, cw());
+        if (hasIcon()) ctx.drawItem(iconStack(), p, p + (Math.max(ch(), 16) - 16) / 2);
+        content(ctx, p + iconW(), p + (Math.max(ch(), hasIcon() ? 16 : 0) - ch()) / 2, cw());
     }
 
     protected void textC(DrawContext ctx, String s, int x, int y, int color) {

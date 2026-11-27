@@ -11,7 +11,7 @@ import org.lwjgl.glfw.GLFW;
 import java.util.*;
 
 public class HudEditorScreen extends Screen {
-    private static final int PURPLE = 0xFFA855F7, SNAP = 6, BW = 58;
+    private static final int PURPLE = 0xFFFFFFFF, SNAP = 6, BW = 58;
     private static final String[] ROW1 = {"SAVE", "CANCEL", "RESET", "PREVIEW", "LOCK ALL"};
     private static final String[] ROW2 = {"LOCK", "HIDE", "FRONT", "BACK", "GRID"};
 
@@ -76,7 +76,7 @@ public class HudEditorScreen extends Screen {
 
     private void button(DrawContext ctx, int row, int i, String label, int mx, int my, boolean active) {
         boolean h = in(row, i, mx, my);
-        Draw.rrect(ctx, bx(i), by(row), BW, 18, 3, active ? 0xFF7C3AED : h ? 0xFF2E2E3D : 0xFF1F1F29);
+        Draw.rrect(ctx, bx(i), by(row), BW, 18, 3, active ? 0xFF8C8C8C : h ? 0xFF2E2E3D : 0xFF1F1F29);
         ctx.drawText(textRenderer, label, bx(i) + (BW - textRenderer.getWidth(label)) / 2, by(row) + 5, 0xFFFFFFFF, false);
     }
 

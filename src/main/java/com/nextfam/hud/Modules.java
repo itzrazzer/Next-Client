@@ -9,7 +9,9 @@ import net.minecraft.client.network.ServerInfo;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.text.Text;
 import net.minecraft.util.math.MathHelper;
 import java.util.*;
@@ -90,7 +92,7 @@ public final class Modules {
             @Override public boolean visible() { return CombatTracker.combo > 0 || HudManager.editing; }
         });
         l.add(new BarHud("cooldown", "Attack Cooldown", "Combat", "Attack charge", -1, 135,
-                () -> mc().player == null ? 1f : mc().player.getAttackCooldownProgress(0f), () -> 1f, 0xFFA855F7, true));
+                () -> mc().player == null ? 1f : mc().player.getAttackCooldownProgress(0f), () -> 1f, 0xFFFFFFFF, true));
         l.add(new FlashText("damage", "Damage Indicator", "Last damage dealt", -1, 110,
                 () -> "-" + fmt(CombatTracker.lastDamage), () -> CombatTracker.lastDamageTime));
 
@@ -103,7 +105,7 @@ public final class Modules {
 
     static class TextHud extends HudElement {
         final Supplier<String> sup; String t = "";
-        TextHud(String id, String n, String cat, String desc, int x, int y, Supplier<String> s) { super(id, n, cat, desc, x, y); sup = s; }
+        TextHud(String id, String n, String cat, String desc, int x, int y, Supplier<String> s) { super(id, n, cat, desc, x, y); sup = s; enableIcon(); }
         private void upd() { try { t = sup.get(); } catch (Exception e) { t = "-"; } }
         @Override protected int cw() { upd(); return Math.max(20, tr().getWidth(t)); }
         @Override protected int ch() { return 9; }
@@ -119,7 +121,7 @@ public final class Modules {
 
         NumberHud(String id, String n, String cat, String desc, int x, int y, Supplier<Float> v, String suf, int dec,
                   Function<Float, Integer> cf, boolean flash) {
-            super(id, n, cat, desc, x, y); val = v; suffix = suf; this.dec = dec; this.cf = cf; this.flash = flash;
+            super(id, n, cat, desc, x, y); val = v; suffix = suf; this.dec = dec; this.cf = cf; this.flash = flash; enableIcon();
         }
         @Override protected int cw() {
             int base = tr().getWidth("0000" + suffix + (dec > 0 ? ".0" : ""));
@@ -152,7 +154,7 @@ public final class Modules {
         final Supplier<Float> v, m; final int color; final boolean pct; final Anim fill = new Anim(0);
         final Setting showText = extra(Setting.bool("showText", "Show Value", true));
         BarHud(String id, String n, String cat, String desc, int x, int y, Supplier<Float> v, Supplier<Float> m, int color, boolean pct) {
-            super(id, n, cat, desc, x, y); this.v = v; this.m = m; this.color = color; this.pct = pct;
+            super(id, n, cat, desc, x, y); this.v = v; this.m = m; this.color = color; this.pct = pct; enableIcon();
         }
         @Override protected int cw() { return 80; }
         @Override protected int ch() { return 10; }
@@ -174,7 +176,7 @@ public final class Modules {
         final Anim[] an = new Anim[7];
         final Setting mouse = extra(Setting.bool("mouse", "Show Mouse Buttons", true));
         final Setting space = extra(Setting.bool("space", "Show Space Bar", true));
-        final Setting pressed = extra(Setting.color("pressed", "Pressed Color", 0xFFA855F7));
+        final Setting pressed = extra(Setting.color("pressed", "Pressed Color", 0xFFFFFFFF));
         KeystrokesHud() {
             super("keystrokes", "Keystrokes", "Player", "WASD, mouse buttons and space with press animation", 6, 9999);
             for (int i = 0; i < an.length; i++) an[i] = new Anim(0);
@@ -234,37 +236,56 @@ public final class Modules {
     }
 
     static class PotionHud extends HudElement {
-        static class PE { final Anim a = new Anim(0); String name = ""; int dur, max = 1; }
+        static class PE { final Anim a = new Anim(0); String name = "", key = ""; int dur, max = 1; }
         final Map<String, PE> m = new LinkedHashMap<>();
-        PotionHud() { super("potions", "Potion Effects", "Player", "Active effects with slide and fade animation", 9999, 130); }
+        final Map<String, ItemStack> icons = new HashMap<>();
+        PotionHud() { super("potions", "Potion Effects", "Player", "Active effects with potion icon, slide and fade animation", 9999, 130); }
+        static Item iconFor(String key) {
+            String k = key.substring(key.lastIndexOf('.') + 1);
+            return switch (k) {
+                case "speed" -> Items.SUGAR; case "slowness" -> Items.COBWEB; case "haste" -> Items.GOLDEN_PICKAXE;
+                case "strength" -> Items.BLAZE_POWDER; case "regeneration" -> Items.GHAST_TEAR; case "fire_resistance" -> Items.MAGMA_CREAM;
+                case "resistance" -> Items.IRON_INGOT; case "absorption" -> Items.GOLDEN_APPLE; case "jump_boost" -> Items.RABBIT_FOOT;
+                case "night_vision" -> Items.GOLDEN_CARROT; case "water_breathing" -> Items.PUFFERFISH; case "poison" -> Items.SPIDER_EYE;
+                case "weakness" -> Items.FERMENTED_SPIDER_EYE; case "wither" -> Items.WITHER_SKELETON_SKULL; case "levitation" -> Items.SHULKER_SHELL;
+                case "slow_falling" -> Items.PHANTOM_MEMBRANE; case "saturation" -> Items.COOKED_BEEF; case "instant_health" -> Items.GLISTERING_MELON_SLICE;
+                case "glowing" -> Items.GLOWSTONE_DUST; case "invisibility" -> Items.GLASS; case "hunger" -> Items.ROTTEN_FLESH;
+                default -> Items.POTION;
+            };
+        }
         private void update() {
             var p = mc().player; Set<String> seen = new HashSet<>();
             if (p != null) for (StatusEffectInstance e : p.getStatusEffects()) {
                 String k = e.getTranslationKey(); seen.add(k);
                 PE pe = m.computeIfAbsent(k, z -> new PE());
+                pe.key = k;
                 pe.name = Text.translatable(k).getString() + " " + (e.getAmplifier() + 1);
                 pe.dur = e.getDuration(); pe.max = Math.max(pe.max, pe.dur); pe.a.to(1f);
             }
             if (HudManager.editing && seen.isEmpty()) {
                 seen.add("sample"); PE pe = m.computeIfAbsent("sample", z -> new PE());
-                pe.name = "Speed II"; pe.dur = 1200; pe.max = 1800; pe.a.to(1f);
+                pe.key = "effect.minecraft.speed"; pe.name = "Speed II"; pe.dur = 1200; pe.max = 1800; pe.a.to(1f);
             }
             for (var en : m.entrySet()) if (!seen.contains(en.getKey())) en.getValue().a.to(0f);
             m.values().removeIf(pe -> pe.a.t == 0f && pe.a.v < 0.02f);
         }
         @Override public boolean visible() { update(); return !m.isEmpty(); }
-        @Override protected int cw() { return 96; }
-        @Override protected int ch() { update(); return Math.max(18, m.size() * 20 - 2); }
+        @Override protected int cw() { return 20 + 96; }
+        @Override protected int ch() { update(); return Math.max(18, m.size() * 22 - 2); }
         @Override protected void content(DrawContext ctx, int x, int y, int w) {
             int i = 0;
             for (PE pe : m.values()) {
-                float al = pe.a.get(); int ox = Math.round((1f - al) * -24f); int yy = y + i * 20;
+                float al = pe.a.get(); int ox = Math.round((1f - al) * -24f); int yy = y + i * 22;
+                ItemStack st = icons.computeIfAbsent(pe.key, k -> new ItemStack(iconFor(k)));
+                Draw.rrect(ctx, x + ox, yy, 18, 18, 4, a(Draw.a(0x66000000, al)));
+                if (al > 0.6f) ctx.drawItem(st, x + ox + 1, yy + 1);
                 String time = pe.dur < 0 ? "INF" : (pe.dur / 1200) + ":" + String.format(Locale.ROOT, "%02d", (pe.dur / 20) % 60);
-                textC(ctx, pe.name, x + ox, yy, Draw.a(textColor.c, al));
-                textC(ctx, time, x + ox + w - tr().getWidth(time), yy, Draw.a(0xFFC084FC, al));
+                textC(ctx, pe.name, x + ox + 22, yy, Draw.a(textColor.c, al));
+                textC(ctx, time, x + ox + w - tr().getWidth(time), yy, Draw.a(0xFFD4D4D4, al));
                 float f = pe.dur < 0 ? 1f : Math.min(1f, pe.dur / (float) Math.max(1, pe.max));
-                ctx.fill(x + ox, yy + 11, x + ox + w, yy + 14, a(Draw.a(0x66000000, al)));
-                ctx.fill(x + ox, yy + 11, x + ox + Math.round(w * f), yy + 14, a(Draw.a(ramp(f, 0.05f, 0.6f), al)));
+                int bw = w - 22;
+                ctx.fill(x + ox + 22, yy + 12, x + ox + 22 + bw, yy + 15, a(Draw.a(0x66000000, al)));
+                ctx.fill(x + ox + 22, yy + 12, x + ox + 22 + Math.round(bw * f), yy + 15, a(Draw.a(ramp(f, 0.05f, 0.6f), al)));
                 i++;
             }
         }
@@ -320,29 +341,51 @@ public final class Modules {
                 int norm = ((k % 360) + 360) % 360;
                 if (norm % 90 == 0) {
                     String l = letters[norm / 90];
-                    textC(ctx, l, px - tr().getWidth(l) / 2, y, l.equals("N") ? 0xFFC084FC : textColor.c);
+                    textC(ctx, l, px - tr().getWidth(l) / 2, y, l.equals("N") ? 0xFFE5E5E5 : textColor.c);
                 } else ctx.fill(px, y + 4, px + 1, y + 8, a(Draw.a(textColor.c, 0.6f)));
             }
-            ctx.fill(x + w / 2, y + 9, x + w / 2 + 1, y + 10, a(0xFFA855F7));
+            ctx.fill(x + w / 2, y + 9, x + w / 2 + 1, y + 10, a(0xFFFFFFFF));
         }
     }
 
     static class CrosshairHud extends HudElement {
+        final Setting mode = extra(Setting.choice("mode", "Style", 0, "Lines", "Pixels"));
         final Setting size = extra(Setting.num("size", "Size", 5f, 1f, 15f).step(1f));
         final Setting gap = extra(Setting.num("gap", "Gap", 2f, 0f, 8f).step(1f));
         final Setting thick = extra(Setting.num("thick", "Thickness", 1f, 1f, 4f).step(1f));
         final Setting color = extra(Setting.color("color", "Crosshair Color", 0xFFFFFFFF));
         final Setting dot = extra(Setting.bool("dot", "Center Dot", false));
+        final Setting px = extra(Setting.num("px", "Pixel Size", 1f, 1f, 4f).step(1f));
         final Setting hideVanilla = extra(Setting.bool("hideVanilla", "Hide Vanilla Crosshair", true));
         CrosshairHud() {
-            super("crosshair", "Custom Crosshair", "Visual", "Adjustable crosshair (the vanilla crosshair stays visible)", -1, -1);
+            super("crosshair", "Custom Crosshair", "Visual", "Lines or a crosshair you draw pixel by pixel", -1, -1);
             bg.def(false); pad.def(0f);
         }
+        @Override public List<ExtraBtn> extraButtons() {
+            return List.of(new ExtraBtn("EDIT PIXELS (draw your own crosshair)", mode.idx == 1, () -> {
+                mode.idx = 1; var c = mc(); c.setScreen(new com.nextfam.gui.PixelCrosshairScreen(c.currentScreen));
+            }));
+        }
         private int total() { return 2 * (Math.round(size.f) + Math.round(gap.f)) + Math.round(thick.f); }
-        @Override protected int cw() { return total(); }
-        @Override protected int ch() { return total(); }
+        @Override protected int cw() { return mode.idx == 1 ? 15 * Math.round(px.f) : total(); }
+        @Override protected int ch() { return cw(); }
         @Override protected void content(DrawContext ctx, int x, int y, int w) {
-            int s = Math.round(size.f), g = Math.round(gap.f), t = Math.round(thick.f), c = a(color.c);
+            int c = a(color.c);
+            if (mode.idx == 1) {
+                int s = Math.round(px.f);
+                for (int r = 0; r < 15; r++) {
+                    int cI = 0;
+                    while (cI < 15) {
+                        if (!com.nextfam.config.NfConfig.CROSS[r][cI]) { cI++; continue; }
+                        int k = cI + 1;
+                        while (k < 15 && com.nextfam.config.NfConfig.CROSS[r][k]) k++;
+                        ctx.fill(x + cI * s, y + r * s, x + k * s, y + (r + 1) * s, c);
+                        cI = k;
+                    }
+                }
+                return;
+            }
+            int s = Math.round(size.f), g = Math.round(gap.f), t = Math.round(thick.f);
             int cx = x + s + g, cy = y + s + g;
             ctx.fill(cx, y, cx + t, y + s, c);
             ctx.fill(cx, y + total() - s, cx + t, y + total(), c);

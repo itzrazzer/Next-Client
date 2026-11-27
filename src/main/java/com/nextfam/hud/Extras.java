@@ -6,6 +6,7 @@ import com.nextfam.util.Draw;
 import com.nextfam.util.Proj;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.entity.Entity;
+import com.nextfam.hud.HudManager;
 import net.minecraft.entity.TntEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -63,7 +64,7 @@ public final class Extras {
     }
 
     static class BlockOutline extends OverlayModule {
-        final Setting color = extra(Setting.color("color", "Outline Color", 0xFFA855F7));
+        final Setting color = extra(Setting.color("color", "Outline Color", 0xFFFFFFFF));
         final Setting thick = extra(Setting.num("thick", "Thickness", 1f, 1f, 4f).step(1f));
         final Setting rainbow = extra(Setting.bool("rainbow", "Rainbow", false));
         BlockOutline() { super("blockoutline", "Block Outlines", "Visual", "Colored outline on the block you look at (2D overlay)"); }
@@ -112,20 +113,44 @@ public final class Extras {
     }
 
     static class FpsOpt extends OverlayModule {
-        final Setting particles = extra(Setting.bool("particles", "Minimal Particles", true));
-        final Setting shadows = extra(Setting.bool("shadows", "Disable Entity Shadows", true));
-        final Setting dist = extra(Setting.num("dist", "Entity Distance", 0.6f, 0.5f, 5f));
-        FpsOpt() { super("fpsopt", "FPS Optimizer", "Optimize", "Lowers particles, entity shadows and entity distance for more FPS"); }
+        final Setting uncap = extra(Setting.bool("uncap", "Uncap FPS (no frame limit)", true));
+        final Setting vsync = extra(Setting.bool("vsync", "Turn VSync off", true));
+        final Setting particles = extra(Setting.bool("particles", "Minimal Particles (changes look)", false));
+        final Setting shadows = extra(Setting.bool("shadows", "Disable Entity Shadows (changes look)", false));
+        final Setting dist = extra(Setting.num("dist", "Entity Distance", 1.0f, 0.5f, 5f));
+        FpsOpt() { super("fpsopt", "FPS Optimizer", "Optimize", "Boosts FPS without changing how Minecraft looks (uncapped FPS, VSync off)"); }
     }
 
     static class DeathAnim extends OverlayModule {
-        final Setting players = extra(Setting.bool("players", "Include Players", false));
-        DeathAnim() { super("deathanim", "Death Animation", "Tweaks", "ON = remove the death animation (mobs vanish instantly)"); }
+        final Setting upright = extra(Setting.bool("upright", "Stand Upright (no falling over)", true));
+        final Setting keep = extra(Setting.num("keep", "Keep Body (seconds)", 3f, 0f, 10f).step(1f));
+        final Setting players = extra(Setting.bool("players", "Include Players", true));
+        DeathAnim() { super("deathanim", "Death Animation", "Tweaks", "Dead players and mobs stay standing instead of falling over and vanishing (needs mixin)"); }
     }
 
     static class TotemTweaks extends OverlayModule {
-        final Setting hidePop = extra(Setting.bool("hidePop", "Hide Totem Pop Animation", true));
-        TotemTweaks() { super("totemtweaks", "Totem Tweaks", "Tweaks", "Hides the big totem animation in the middle of the screen"); }
+        final Setting hidePop = extra(Setting.bool("hidePop", "Hide Totem Pop Animation", false));
+        final Setting custom = extra(Setting.bool("custom", "Custom Pop Animation", true));
+        final Setting size = extra(Setting.num("size", "Pop Size", 1.0f, 0.3f, 2.5f));
+        final Setting dur = extra(Setting.num("dur", "Pop Duration (seconds)", 1.2f, 0.4f, 3f));
+        final ItemStack st = new ItemStack(Items.TOTEM_OF_UNDYING);
+        TotemTweaks() { super("totemtweaks", "Totem Tweaks", "Tweaks", "Resize the totem pop animation (replaces the vanilla pop; needs mixin)"); }
+        @Override public void worldRender(DrawContext ctx, int sw, int sh, float tp) {
+            if (hidePop.b || !custom.b) return;
+            long age = System.currentTimeMillis() - Features.totemPopStart;
+            float p = age / (dur.f * 1000f);
+            if (HudManager.editing) p = 0.4f;
+            if (p < 0f || p >= 1f) return;
+            float ease = p < 0.15f ? p / 0.15f : p < 0.7f ? 1f : (1f - p) / 0.3f;
+            float s = 7f * size.f * ease;
+            float wob = (float) Math.sin(p * 18f) * (1f - p) * 3f;
+            var m = ctx.getMatrices();
+            m.pushMatrix();
+            m.translate(sw / 2f + wob, sh / 2f - 8f);
+            m.scale(s, s);
+            ctx.drawItem(st, -8, -8);
+            m.popMatrix();
+        }
     }
 
     // ---------- HUD baru ----------
@@ -150,23 +175,28 @@ public final class Extras {
 
     static class ShieldHud extends HudElement {
         final ItemStack st = new ItemStack(Items.SHIELD);
-        ShieldHud() { super("shield", "Shield Status", "Combat", "Shield ready / blocking / cooldown", 6, 210); }
-        @Override protected int cw() { return 20 + tr().getWidth("Cooldown"); }
+        ShieldHud() { super("shield", "Shield Status", "Combat", "Shield icon turns green > orange > red with durability, red flash when disabled", 6, 210); }
+        @Override protected int cw() { return 20 + tr().getWidth("Cooldown 100%"); }
         @Override protected int ch() { return 16; }
         @Override protected void content(DrawContext ctx, int x, int y, int w) {
             var p = Modules.mc().player;
-            String s = HudManager.editing ? "Ready" : "No shield"; int col = HudManager.editing ? 0xFFFACC15 : 0xFF9CA3AF;
+            float r = 1f; String s = HudManager.editing ? "Ready" : "No shield"; int col = 0xFF9CA3AF; boolean has = HudManager.editing, broken = false;
             if (p != null) {
                 ItemStack sh = p.getOffHandStack().isOf(Items.SHIELD) ? p.getOffHandStack()
                         : p.getMainHandStack().isOf(Items.SHIELD) ? p.getMainHandStack() : ItemStack.EMPTY;
                 if (!sh.isEmpty()) {
-                    if (p.getItemCooldownManager().isCoolingDown(sh)) { s = "Cooldown"; col = 0xFFF87171; }
-                    else if (p.isBlocking()) { s = "Blocking"; col = 0xFF4ADE80; }
-                    else { s = "Ready"; col = 0xFFFACC15; }
+                    has = true;
+                    r = sh.isDamageable() ? (sh.getMaxDamage() - sh.getDamage()) / (float) sh.getMaxDamage() : 1f;
+                    if (p.getItemCooldownManager().isCoolingDown(sh)) { s = "Disabled"; broken = true; }
+                    else s = p.isBlocking() ? "Blocking" : "Ready";
                 }
             }
+            if (has) col = r > 0.6f ? 0xFF4ADE80 : r > 0.3f ? 0xFFFB923C : 0xFFF87171;
+            if (broken) { float pulse = 0.5f + 0.5f * (float) Math.sin(System.currentTimeMillis() / 120.0); col = Draw.lerp(0xFF7F1D1D, 0xFFFF4444, pulse); }
+            Draw.rrect(ctx, x - 1, y - 1, 18, 18, 4, a(Draw.a(col, has ? 0.35f : 0.1f)));
             ctx.drawItem(st, x, y);
-            textC(ctx, s, x + 19, y + 4, col);
+            if (has) Draw.rrect(ctx, x, y, 16, 16, 3, a(Draw.a(col, broken ? 0.55f : 0.32f)));
+            textC(ctx, has ? s + " " + Math.round(r * 100) + "%" : s, x + 19, y + 4, col);
         }
     }
 }

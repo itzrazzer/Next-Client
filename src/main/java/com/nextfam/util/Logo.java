@@ -72,22 +72,27 @@ public final class Logo {
         "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" +
         "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
     private static final int[] A = new int[N * N];
+    private static final int[] B = new int[32 * 32];
     static {
         for (int i = 0; i < N * N; i++) A[i] = Integer.parseInt(DATA.substring(i * 2, i * 2 + 2), 16);
+        for (int j = 0; j < 32; j++) for (int i = 0; i < 32; i++)
+            B[j * 32 + i] = (A[(2 * j) * N + 2 * i] + A[(2 * j) * N + 2 * i + 1] + A[(2 * j + 1) * N + 2 * i] + A[(2 * j + 1) * N + 2 * i + 1]) / 4;
     }
 
     public static void draw(DrawContext ctx, int x, int y, int size, float alpha) {
+        int[] d = size <= 40 ? B : A;
+        int n = size <= 40 ? 32 : N;
         var m = ctx.getMatrices();
         m.pushMatrix();
         m.translate((float) x, (float) y);
-        m.scale(size / (float) N, size / (float) N);
-        for (int j = 0; j < N; j++) {
+        m.scale(size / (float) n, size / (float) n);
+        for (int j = 0; j < n; j++) {
             int i = 0;
-            while (i < N) {
-                int q = A[j * N + i] >> 4;
+            while (i < n) {
+                int q = d[j * n + i] >> 4;
                 if (q == 0) { i++; continue; }
                 int k = i + 1;
-                while (k < N && (A[j * N + k] >> 4) == q) k++;
+                while (k < n && (d[j * n + k] >> 4) == q) k++;
                 int a = Math.round(q * 17 * alpha);
                 if (a > 4) ctx.fill(i, j, k, j + 1, (a << 24) | 0xFFFFFF);
                 i = k;

@@ -6,11 +6,12 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.event.player.AttackEntityCallback;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.particle.ParticlesMode;
+import net.minecraft.client.option.ParticlesMode;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.ActionResult;
 import org.lwjgl.glfw.GLFW;
@@ -67,9 +68,9 @@ public final class Features {
     }
 
     private static void tick(MinecraftClient c) {
-        if (c.world == null || c.player == null) { Freelook.mode = 0; return; }
+        if (c.world == null || c.player == null) { Freelook.mode = 0; HOLD.clear(); return; }
         if (!PENDING.isEmpty()) { for (Entity e : PENDING) e.discard(); PENDING.clear(); }
-        deathAnim(c);
+        holdTick(c);
         fps(c);
         particles(c);
         view(c);
@@ -83,30 +84,70 @@ public final class Features {
         }
     }
 
-    private static void deathAnim(MinecraftClient c) {
-        HudElement d = HudManager.get("deathanim");
-        if (d == null || !d.enabled) return;
-        boolean pl = d.s("players") != null && d.s("players").b;
-        List<Entity> dead = new ArrayList<>();
-        for (Entity e : c.world.getEntities())
-            if (e instanceof LivingEntity le && le != c.player && le.deathTime > 0 && (pl || !(e instanceof PlayerEntity))) dead.add(e);
-        for (Entity e : dead) e.discard();
+    // ---- Death animation: berdiri tegak + tahan badan beberapa detik ----
+    public static volatile long totemPopStart = -100000;
+    private static final Set<Integer> BYPASS = new HashSet<>();
+    private static final List<Object[]> HOLD = new ArrayList<>();
+
+    public static boolean cancelVanillaPop() {
+        HudElement e = HudManager.get("totemtweaks");
+        return e != null && e.enabled && (e.s("hidePop").b || e.s("custom").b);
     }
+
+    public static boolean uprightFor(LivingEntity le) {
+        HudElement d = HudManager.get("deathanim");
+        if (d == null || !d.enabled || !d.s("upright").b) return false;
+        if (le == MinecraftClient.getInstance().player) return false;
+        return d.s("players").b || !(le instanceof PlayerEntity);
+    }
+
+    public static boolean holdBody(ClientWorld w, int id, Entity.RemovalReason r) {
+        if (BYPASS.remove(id)) return false;
+        HudElement d = HudManager.get("deathanim");
+        if (d == null || !d.enabled) return false;
+        float sec = d.s("keep").f;
+        if (sec <= 0f) return false;
+        Entity e = w.getEntityById(id);
+        if (!(e instanceof LivingEntity le) || le == MinecraftClient.getInstance().player || le.deathTime <= 0) return false;
+        if (le instanceof PlayerEntity && !d.s("players").b) return false;
+        HOLD.add(new Object[]{id, r, Math.round(sec * 20f)});
+        return true;
+    }
+
+    private static void holdTick(MinecraftClient c) {
+        if (HOLD.isEmpty()) return;
+        Iterator<Object[]> it = HOLD.iterator();
+        List<Object[]> done = new ArrayList<>();
+        while (it.hasNext()) {
+            Object[] h = it.next();
+            int t = (Integer) h[2] - 1; h[2] = t;
+            if (t <= 0) { done.add(h); it.remove(); }
+        }
+        for (Object[] h : done) { BYPASS.add((Integer) h[0]); c.world.removeEntity((Integer) h[0], (Entity.RemovalReason) h[1]); }
+    }
+
+    private static boolean fpsApplied, oldVsync; private static int oldMax;
 
     private static void fps(MinecraftClient c) {
         var o = c.options; HudElement e = HudManager.get("fpsopt");
         if (e != null && e.enabled) {
             if (!applied) {
                 oldP = o.getParticles().getValue(); oldS = o.getEntityShadows().getValue(); oldD = o.getEntityDistanceScaling().getValue();
+                oldMax = o.getMaxFps().getValue(); oldVsync = o.getEnableVsync().getValue();
                 applied = true;
             }
+            if (e.s("uncap").b) o.getMaxFps().setValue(260);
+            if (e.s("vsync").b) o.getEnableVsync().setValue(false);
             if (e.s("particles").b) o.getParticles().setValue(ParticlesMode.MINIMAL);
             if (e.s("shadows").b) o.getEntityShadows().setValue(false);
             o.getEntityDistanceScaling().setValue((double) e.s("dist").f);
-        } else if (applied) {
-            o.getParticles().setValue(oldP); o.getEntityShadows().setValue(oldS); o.getEntityDistanceScaling().setValue(oldD);
-            applied = false;
-        }
+        } else if (applied) restoreFps(o);
+    }
+
+    private static void restoreFps(net.minecraft.client.option.GameOptions o) {
+        o.getParticles().setValue(oldP); o.getEntityShadows().setValue(oldS); o.getEntityDistanceScaling().setValue(oldD);
+        o.getMaxFps().setValue(oldMax); o.getEnableVsync().setValue(oldVsync);
+        applied = false;
     }
 
     private static void particles(MinecraftClient c) {
@@ -157,7 +198,7 @@ public final class Features {
 
     private static void restoreAll(MinecraftClient c) {
         var o = c.options;
-        if (applied) { o.getParticles().setValue(oldP); o.getEntityShadows().setValue(oldS); o.getEntityDistanceScaling().setValue(oldD); applied = false; }
+        if (applied) restoreFps(o);
         if (pApplied) { o.getParticles().setValue(pOld); pApplied = false; }
         if (fovApplied) { o.getFov().setValue(fovOrig); o.getFovEffectScale().setValue(effOrig); fovApplied = false; }
         if (spApplied) { o.getSprintToggled().setValue(spOld); spApplied = false; }

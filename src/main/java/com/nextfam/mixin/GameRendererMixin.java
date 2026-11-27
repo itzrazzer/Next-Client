@@ -13,6 +13,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class GameRendererMixin {
     @Inject(method = "showFloatingItem", at = @At("HEAD"), cancellable = true)
     private void nextfam$totem(ItemStack stack, CallbackInfo ci) {
-        if (stack.isOf(Items.TOTEM_OF_UNDYING) && Features.hideTotemPop()) ci.cancel();
+        if (stack.isOf(Items.TOTEM_OF_UNDYING)) {
+            Features.totemPopStart = System.currentTimeMillis();
+            if (Features.cancelVanillaPop()) ci.cancel();
+        }
     }
 }

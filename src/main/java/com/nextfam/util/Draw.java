@@ -35,8 +35,8 @@ public final class Draw {
         if (w <= 0 || h <= 0) return;
         r = Math.max(0, Math.min(r, Math.min(w, h) / 2));
         boolean grad = c1 != c2;
-        if (r == 0 && !grad) { c.fill(x, y, x + w, y + h, c1); return; }
         if (!grad) {
+            if (r == 0) { c.fill(x, y, x + w, y + h, c1); return; }
             for (int i = 0; i < r; i++) {
                 int in = inset(r, i);
                 c.fill(x + in, y + i, x + w - in, y + i + 1, c1);
@@ -45,23 +45,52 @@ public final class Draw {
             c.fill(x, y + r, x + w, y + h - r, c1);
             return;
         }
-        for (int row = 0; row < h; row++) {
-            int in = inset(r, Math.min(row, h - 1 - row));
-            c.fill(x + in, y + row, x + w - in, y + row + 1, lerp(c1, c2, h <= 1 ? 0 : row / (float) (h - 1)));
+        float den = Math.max(1, h - 1);
+        for (int i = 0; i < r; i++) {
+            int in = inset(r, i);
+            c.fill(x + in, y + i, x + w - in, y + i + 1, lerp(c1, c2, i / den));
+            c.fill(x + in, y + h - 1 - i, x + w - in, y + h - i, lerp(c1, c2, (h - 1 - i) / den));
         }
+        if (h - 2 * r > 0) c.fillGradient(x, y + r, x + w, y + h - r, lerp(c1, c2, r / den), lerp(c1, c2, (h - r) / den));
     }
 
     public static void rborder(DrawContext c, int x, int y, int w, int h, int r, int bw, int color) {
         if (w <= 0 || h <= 0) return;
         r = Math.max(0, Math.min(r, Math.min(w, h) / 2));
-        for (int row = 0; row < h; row++) {
-            int in = inset(r, Math.min(row, h - 1 - row));
-            int l = x + in, rt = x + w - in;
-            if (row < bw || row >= h - bw) c.fill(l, y + row, rt, y + row + 1, color);
+        if (r == 0) {
+            c.fill(x, y, x + w, y + bw, color); c.fill(x, y + h - bw, x + w, y + h, color);
+            c.fill(x, y + bw, x + bw, y + h - bw, color); c.fill(x + w - bw, y + bw, x + w, y + h - bw, color);
+            return;
+        }
+        if (bw > r) {
+            for (int row = 0; row < h; row++) {
+                int in = inset(r, Math.min(row, h - 1 - row));
+                int l = x + in, rt = x + w - in;
+                if (row < bw || row >= h - bw) c.fill(l, y + row, rt, y + row + 1, color);
+                else { c.fill(l, y + row, l + bw, y + row + 1, color); c.fill(rt - bw, y + row, rt, y + row + 1, color); }
+            }
+            return;
+        }
+        for (int row = 0; row < r; row++) {
+            int in = inset(r, row);
+            int l = x + in, rt = x + w - in, by = y + h - 1 - row;
+            if (row < bw) { c.fill(l, y + row, rt, y + row + 1, color); c.fill(l, by, rt, by + 1, color); }
             else {
-                c.fill(l, y + row, l + bw, y + row + 1, color);
-                c.fill(rt - bw, y + row, rt, y + row + 1, color);
+                c.fill(l, y + row, l + bw, y + row + 1, color); c.fill(rt - bw, y + row, rt, y + row + 1, color);
+                c.fill(l, by, l + bw, by + 1, color); c.fill(rt - bw, by, rt, by + 1, color);
             }
         }
+        c.fill(x, y + r, x + bw, y + h - r, color);
+        c.fill(x + w - bw, y + r, x + w, y + h - r, color);
+    }
+
+    // ---- HSV helper untuk color picker ----
+    public static int hsv(float h, float s, float v, float a) {
+        int rgb = java.awt.Color.HSBtoRGB(h, s, v) & 0xFFFFFF;
+        return (Math.round(Math.max(0f, Math.min(1f, a)) * 255f) << 24) | rgb;
+    }
+    public static float[] toHsv(int argb) {
+        float[] f = java.awt.Color.RGBtoHSB((argb >> 16) & 255, (argb >> 8) & 255, argb & 255, null);
+        return new float[]{f[0], f[1], f[2], ((argb >>> 24) & 255) / 255f};
     }
 }
