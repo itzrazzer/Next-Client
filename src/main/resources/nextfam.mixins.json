@@ -18,7 +18,8 @@
     "PlayerEntityRendererMixin",
     "LivingEntityRendererMixin",
     "ClientWorldMixin",
-    "PlayerListHudMixin"
+    "PlayerListHudMixin",
+    "SimpleOptionAccessor"
   ],
   "injectors": {
     "defaultRequire": 0

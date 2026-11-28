@@ -28,6 +28,9 @@ public class PackStudioScreen extends Screen {
     private int rowsVer = -1; private int rowsCat = -1; private String rowsQ = "";
     private int conflicts; private int confVer = -1;
     private int pad = 8, leftW = 100, rightW, mainX, mainW, rightX, bodyTop, bodyBot;
+    private boolean view3d = true;
+    private double yaw = 0.7, dragYaw = 0; private boolean draggingPreview;
+    private int pvX, pvY, pvS;   // kotak preview untuk drag-rotate
 
     public PackStudioScreen(Screen parent) { super(Text.literal("NextFam Pack Studio")); this.parent = parent; }
 
@@ -47,6 +50,8 @@ public class PackStudioScreen extends Screen {
         mainX = pad + leftW + 8; rightX = width - pad - rightW; mainW = rightX - 8 - mainX;
         bodyTop = pad + 30; bodyBot = height - pad;
     }
+
+    private int packRows() { return height < 300 ? 3 : 5; }
 
     private boolean in(double mx, double my, int x, int y, int w, int h) { return mx >= x && mx < x + w && my >= y && my < y + h; }
     private void t(DrawContext c, String s, int x, int y, int col) { c.drawText(textRenderer, Fonts.m(s), x, y, col, false); }
@@ -135,7 +140,7 @@ public class PackStudioScreen extends Screen {
     private void right(DrawContext ctx, int mx, int my) {
         Draw.rrect(ctx, rightX, bodyTop, rightW, bodyBot - bodyTop, 6, PANEL);
         tb(ctx, "PACKS (top = highest priority)", rightX + 8, bodyTop + 6, DIM);
-        int ry = bodyTop + 20, vis = 5;
+        int ry = bodyTop + 20, vis = packRows();
         List<PackSource> ps = new ArrayList<>(PM.packs);
         packScroll = Math.max(0, Math.min(Math.max(0, ps.size() - vis), packScroll));
         for (int i = (int) packScroll; i < ps.size() && i < (int) packScroll + vis; i++) {
@@ -153,23 +158,38 @@ public class PackStudioScreen extends Screen {
         }
         if (ps.isEmpty()) t(ctx, "Copy a .zip path, then IMPORT PACK", rightX + 8, ry + 4, DIM);
 
-        // preview
+        // preview 3D
         int py = ry + vis * 19 + 6;
         tb(ctx, "PREVIEW", rightX + 8, py, DIM);
-        int ps2 = Math.min(64, rightW - 100);
+        int tgX = rightX + rightW - 8 - 54, tgY = py - 2;
+        Draw.rrect(ctx, tgX, tgY, 26, 12, 4, view3d ? 0xFFEDEDED : 0xFF262626);
+        tc(ctx, "3D", tgX + 13, tgY + 2, view3d ? 0xFF000000 : WHITE);
+        Draw.rrect(ctx, tgX + 28, tgY, 26, 12, 4, !view3d ? 0xFFEDEDED : 0xFF262626);
+        tc(ctx, "2D", tgX + 41, tgY + 2, !view3d ? 0xFF000000 : WHITE);
+        int avail = (bodyBot - 88) - (py + 14);
+        int ps2 = Math.max(40, Math.min(Math.min(96, rightW - 90), avail));
+        pvX = rightX + 8; pvY = py + 14; pvS = ps2;
         if (selected != null && PM.index.get(selected) != null) {
             List<PackSource> l = PM.index.get(selected);
             PackSource chosen = MG.picks.get(selected); PackSource show = chosen != null ? chosen : l.get(0);
-            Draw.rborder(ctx, rightX + 8, py + 12, ps2, ps2, 0, 1, 0x55FFFFFF);
-            PackPreview.draw(ctx, PackPreview.load(show, selected), rightX + 8, py + 12, ps2);
-            t(ctx, Fonts.trim(textRenderer, TextureBrowser.shortName(selected), rightW - ps2 - 26), rightX + ps2 + 16, py + 14, WHITE);
-            t(ctx, "Using: " + (chosen == null ? "-" : chosen.name), rightX + ps2 + 16, py + 26, DIM);
+            Draw.rrect(ctx, pvX, pvY, ps2, ps2, 5, 0xFF181818);
+            Draw.rborder(ctx, pvX, pvY, ps2, ps2, 5, 1, 0x44FFFFFF);
+            if (!draggingPreview) yaw += 0.012;
+            ctx.enableScissor(pvX, pvY, pvX + ps2, pvY + ps2);
+            drawPreview(ctx, show, selected, pvX + ps2 / 2f, pvY + ps2 / 2f + 2, ps2 * 0.78f);
+            ctx.disableScissor();
+            tc(ctx, view3d ? "drag to rotate" : "", pvX + ps2 / 2, pvY + ps2 - 9, 0xFF6B6B6B);
+            int tx0 = rightX + ps2 + 16;
+            t(ctx, Fonts.trim(textRenderer, TextureBrowser.shortName(selected), rightW - ps2 - 24), tx0, py + 16, WHITE);
+            t(ctx, TextureBrowser.category(selected), tx0, py + 28, DIM);
+            t(ctx, "Using: " + (chosen == null ? "-" : Fonts.trim(textRenderer, chosen.name, rightW - ps2 - 58)), tx0, py + 40, DIM);
             for (int k = 0; k < l.size() && k < 4; k++) {
-                int tx = rightX + ps2 + 16 + (k % 2) * 30, ty = py + 40 + (k / 2) * 30;
+                int tx = tx0 + (k % 2) * 30, ty = py + 54 + (k / 2) * 30;
+                if (ty + 24 > pvY + ps2 + 2) break;
                 PackPreview.draw(ctx, PackPreview.load(l.get(k), selected), tx, ty, 24);
                 tb(ctx, String.valueOf(letter(l.get(k))), tx + 26, ty + 2, WHITE);
             }
-        } else t(ctx, "Select a texture to preview", rightX + 8, py + 16, DIM);
+        } else t(ctx, "Select a texture to preview", rightX + 8, py + 18, DIM);
 
         // export
         int by = bodyBot - 50;
@@ -179,6 +199,42 @@ public class PackStudioScreen extends Screen {
         String st = !PackExporter.status.isEmpty() ? PackExporter.status : !msg.isEmpty() ? msg : PM.status;
         t(ctx, Fonts.trim(textRenderer, st, rightW - 14), rightX + 8, bodyBot - 28, 0xFFD0D0D0);
         if (st.length() > 34) t(ctx, Fonts.trim(textRenderer, st.substring(Math.min(st.length(), 34)), rightW - 14), rightX + 8, bodyBot - 17, 0xFFD0D0D0);
+    }
+
+    private static final String[] NOT_CUBE = {"sapling", "flower", "tulip", "orchid", "allium", "azalea", "grass", "fern", "torch", "rail", "vine", "door", "ladder", "lever",
+        "button", "pane", "sign", "fire", "carpet", "banner", "bed", "stem", "wheat", "carrots", "potatoes", "beetroots", "seeds", "bush", "roots", "sprouts", "coral_fan", "chain", "lantern", "bars", "rod", "cross"};
+
+    private PackPreview.Img imgOf(PackSource preferred, String path) {
+        PackSource s = preferred != null && preferred.has(path) ? preferred : null;
+        if (s == null) { List<PackSource> l = PM.index.get(path); if (l != null && !l.isEmpty()) s = l.get(0); }
+        return s == null ? null : PackPreview.load(s, path);
+    }
+
+    /** Menggambar preview: blok = kubus 3D, item = sprite tebal berputar, lainnya = datar. */
+    private void drawPreview(DrawContext ctx, PackSource src, String path, float cx, float cy, float size) {
+        PackPreview.Img main = PackPreview.load(src, path);
+        String cat = TextureBrowser.category(path);
+        if (!view3d || main == null) { if (main == null) { tc(ctx, "no image", (int) cx, (int) cy - 4, DIM); return; } Preview3D.flat(ctx, main, cx, cy, size); return; }
+        String low = path.toLowerCase();
+        if (cat.equals("Blocks") && low.endsWith(".png")) {
+            boolean flatPlant = false;
+            for (String k : NOT_CUBE) if (low.contains(k)) { flatPlant = true; break; }
+            if (!flatPlant) {
+                String base = path.substring(0, path.length() - 4);
+                for (String suf : new String[]{"_top", "_side", "_bottom", "_front", "_end", "_back"}) if (base.endsWith(suf)) { base = base.substring(0, base.length() - suf.length()); break; }
+                PackPreview.Img top = imgOf(src, base + "_top.png"); if (top == null) top = imgOf(src, base + "_end.png");
+                PackPreview.Img side = imgOf(src, base + "_side.png"); if (side == null) side = imgOf(src, base + ".png");
+                PackPreview.Img front = imgOf(src, base + "_front.png");
+                if (side == null) side = main;
+                if (top == null) top = main;
+                Preview3D.cube(ctx, top, side, front, cx, cy, size, yaw + dragYaw);
+                return;
+            }
+            Preview3D.extrudedSprite(ctx, main, cx, cy, size, yaw + dragYaw);
+            return;
+        }
+        if (cat.equals("Items") || cat.equals("Particles")) { Preview3D.extrudedSprite(ctx, main, cx, cy, size, yaw + dragYaw); return; }
+        Preview3D.flat(ctx, main, cx, cy, size);
     }
 
     // ---------------- input ----------------
@@ -203,6 +259,13 @@ public class PackStudioScreen extends Screen {
         if (in(mx, my, pad + 4, by + 20, leftW - 8, 16)) { int n = PackConflictManager.autoResolve(PM.index, MG, "All", true); msg = "Merged: resolved " + n + " conflicts by priority"; PackExporter.status = ""; return true; }
         if (in(mx, my, pad + 4, by + 40, leftW - 8, 16)) { MG.clear(); msg = "Picks cleared"; PackExporter.status = ""; return true; }
 
+        // toggle 3D/2D dan drag-rotate
+        int pyc = bodyTop + 20 + packRows() * 19 + 6;
+        int tgX = rightX + rightW - 8 - 54, tgY = pyc - 2;
+        if (in(mx, my, tgX, tgY, 26, 12)) { view3d = true; return true; }
+        if (in(mx, my, tgX + 28, tgY, 26, 12)) { view3d = false; return true; }
+        if (view3d && selected != null && in(mx, my, pvX, pvY, pvS, pvS)) { draggingPreview = true; return true; }
+
         // daftar tekstur
         int top = bodyTop + 20, bot = bodyBot - 14;
         if (in(mx, my, mainX, top, mainW, bot - top)) {
@@ -224,7 +287,7 @@ public class PackStudioScreen extends Screen {
         // daftar pack
         int ry = bodyTop + 20;
         List<PackSource> ps = new ArrayList<>(PM.packs);
-        for (int i = (int) packScroll; i < ps.size() && i < (int) packScroll + 5; i++) {
+        for (int i = (int) packScroll; i < ps.size() && i < (int) packScroll + packRows(); i++) {
             int y = ry + (i - (int) packScroll) * 19;
             if (in(mx, my, rightX + rightW - 34, y, 12, 17)) { PM.move(i, -1); return true; }
             if (in(mx, my, rightX + rightW - 20, y, 12, 17)) { PM.move(i, 1); return true; }
@@ -238,9 +301,18 @@ public class PackStudioScreen extends Screen {
     }
 
     @Override
+    public boolean mouseDragged(Click click, double dx, double dy) {
+        if (draggingPreview) { dragYaw += dx * 0.03; return true; }
+        return super.mouseDragged(click, dx, dy);
+    }
+
+    @Override
+    public boolean mouseReleased(Click click) { draggingPreview = false; return super.mouseReleased(click); }
+
+    @Override
     public boolean mouseScrolled(double mx, double my, double h, double v) {
         layout();
-        if (in(mx, my, rightX, bodyTop, rightW, 20 + 5 * 19)) packScroll -= (float) v;
+        if (in(mx, my, rightX, bodyTop, rightW, 20 + packRows() * 19)) packScroll -= (float) v;
         else scroll -= (float) v * 30f;
         return true;
     }

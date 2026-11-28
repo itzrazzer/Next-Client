@@ -116,6 +116,10 @@ public final class V4 {
 
     static class Anim17 extends Extras.OverlayModule {
         final Setting noDip = extra(Setting.bool("noDip", "No Attack Dip (classic hand)", true));
-        Anim17() { super("anim17", "1.7 Visual Animations", "Tweaks", "Classic look: the held item no longer dips when you attack (partial, needs mixin)"); }
+        final Setting block = extra(Setting.bool("block", "Sword Block Pose (hold right-click)", true));
+        final Setting bx = extra(Setting.num("bx", "Block Pose X", -0.25f, -1f, 1f));
+        final Setting by = extra(Setting.num("by", "Block Pose Y", 0.10f, -1f, 1f));
+        final Setting bz = extra(Setting.num("bz", "Block Pose Z", 0.0f, -1f, 1f));
+        Anim17() { super("anim17", "1.7 Visual Animations", "Tweaks", "Classic hand: no attack dip, and the 1.7 sword block pose while you hold right-click (visual only; tune X/Y/Z)"); }
     }
 }

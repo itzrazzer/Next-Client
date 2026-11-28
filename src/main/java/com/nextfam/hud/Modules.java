@@ -256,7 +256,9 @@ public final class Modules {
         private void update() {
             var p = mc().player; Set<String> seen = new HashSet<>();
             if (p != null) for (StatusEffectInstance e : p.getStatusEffects()) {
-                String k = e.getTranslationKey(); seen.add(k);
+                String k = e.getTranslationKey();
+                if (e.getDuration() > 900000 && k.endsWith("night_vision")) continue;   // efek buatan Fullbright
+                seen.add(k);
                 PE pe = m.computeIfAbsent(k, z -> new PE());
                 pe.key = k;
                 pe.name = Text.translatable(k).getString() + " " + (e.getAmplifier() + 1);

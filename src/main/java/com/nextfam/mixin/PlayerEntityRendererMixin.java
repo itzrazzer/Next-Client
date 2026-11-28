@@ -15,6 +15,6 @@ public class PlayerEntityRendererMixin {
     @Inject(method = "updateRenderState(Lnet/minecraft/client/network/AbstractClientPlayerEntity;Lnet/minecraft/client/render/entity/state/PlayerEntityRenderState;F)V",
             at = @At("TAIL"))
     private void nextfam$state(AbstractClientPlayerEntity player, PlayerEntityRenderState state, float tp, CallbackInfo ci) {
-        if (player == MinecraftClient.getInstance().player) Cosmetics.applyToState(state);
+        Cosmetics.applyToState(state, player.getUuid(), player == MinecraftClient.getInstance().player);
     }
 }

@@ -31,6 +31,10 @@ import java.lang.reflect.Constructor;
 import java.nio.file.*;
 import java.util.*;
 import java.util.function.Supplier;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 
 /** Ping Equalizer, Wings (overlay 2D), Cape custom, logo NextFam di nametag / tab. */
 public final class Cosmetics {
@@ -41,6 +45,7 @@ public final class Cosmetics {
         l.add(new Wings());
         l.add(new CapeMod());
         l.add(new NfLogo());
+        l.add(new Fullbright());
     }
 
     // ---------------- logo di nametag + tab ----------------
@@ -52,11 +57,28 @@ public final class Cosmetics {
     public static boolean logoTab() { HudElement e = HudManager.get("nflogo"); return e != null && e.enabled && e.s("tab").b; }
     public static boolean logoName() { HudElement e = HudManager.get("nflogo"); return e != null && e.enabled && e.s("nametag").b; }
 
-    /** Dipanggil mixin untuk pemain lokal: ganti cape dan beri logo di nametag. */
-    public static void applyToState(Object stateObj) {
+    /** UUID dari GameProfile (authlib tidak di-obfuscate, jadi refleksi aman untuk 'getId' maupun 'id'). */
+    public static UUID uuidOf(Object profile) {
+        if (profile == null) return null;
+        for (String m : new String[]{"getId", "id"}) {
+            try { Object o = profile.getClass().getMethod(m).invoke(profile); if (o instanceof UUID u) return u; } catch (Throwable ignored) {}
+        }
+        return null;
+    }
+
+    public static boolean showLogoFor(UUID id) {
+        var p = MinecraftClient.getInstance().player;
+        if (id == null) return false;
+        if (p != null && p.getUuid().equals(id)) return true;
+        HudElement e = HudManager.get("nflogo");
+        return e != null && e.enabled && e.s("others").b && Presence.isUser(id);
+    }
+
+    /** Dipanggil mixin: cape custom (hanya diri sendiri) + logo di nametag (diri sendiri dan pemain NextFam lain). */
+    public static void applyToState(Object stateObj, UUID id, boolean self) {
         try {
             HudElement cm = HudManager.get("capemod");
-            if (cm != null && cm.enabled && !NfConfig.cape.isEmpty()) {
+            if (self && cm != null && cm.enabled && !NfConfig.cape.isEmpty()) {
                 CapeManager.ensure();
                 var a = CapeManager.asset();
                 if (CapeManager.ok && a != null) {
@@ -65,7 +87,7 @@ public final class Cosmetics {
                     if (st != null) ps.nextfam$setSkin(new SkinTextures(st.body(), a, st.elytra(), st.model(), st.secure()));
                 }
             }
-            if (logoName()) {
+            if (logoName() && showLogoFor(id)) {
                 EntityStateAccessor es = (EntityStateAccessor) stateObj;
                 Text dn = es.nextfam$name();
                 if (dn != null) es.nextfam$setName(withLogo(dn));
@@ -98,6 +120,46 @@ public final class Cosmetics {
         }
 
         public static void select(String name) { NfConfig.cape = name; loaded = null; NfConfig.save(); }
+
+        public static volatile String status = "";
+        static final String[][] OFFICIAL = {
+            {"Migrator", "2340c0e03dd24a11b15a8b33c2a7e9e32abb2051b2481d0ba7defd635ca7a933"},
+            {"Vanilla", "f9a76537647989f9a0b6d001e320dac591c359e9e61a31f4ce11c88f207f0ad4"},
+            {"Mojang", "5786fe99be377dfb6858859f926c4dbc995751e91cee373468c5fbf4865e7151"},
+            {"Mojang Studios", "9e507afc56359978a3eb3e32367042b853cddd0995d17d0da995662913fb00f7"},
+            {"Cherry Blossom", "afd553b39358a24edfe3b8a9a939fa5fa4faa4d9a9c3d6af8eafb377fa05c2bb"},
+            {"Minecon 2011", "953cac8b779fe41383e675ee2b86071a71658f2180f56fbce8aa315ea70e2ed6"},
+            {"Minecon 2012", "a2e8d97ec79100e90a75d369d1b3ba81273c4f82bc1b737e934eed4a854be1b6"},
+            {"Minecon 2013", "153b1a0dfcbae953cdeb6f2c2bf6bf79943239b1372780da44bcbb29273131da"},
+            {"Minecon 2015", "b0cc08840700447322d953a02b965f1d65a13a603bf64b17c803c21446fe1635"},
+            {"Minecon 2016", "e7dfea16dc83c97df01a12fabbd1216359c0cd0ea42f9999b6e97c584963e980"},
+        };
+        private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(8)).followRedirects(HttpClient.Redirect.NORMAL).build();
+
+        static String fileFor(String label) { return "mojang_" + label.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "_") + ".png"; }
+
+        /** Unduh PNG (https saja, maks 2 MB, harus gambar valid) ke folder capes lalu langsung dipakai. */
+        public static void download(String fileName, String url) {
+            if (url == null || !url.startsWith("https://")) { status = "Only https:// URLs are supported"; return; }
+            status = "Downloading...";
+            Thread t = new Thread(() -> {
+                try {
+                    HttpRequest r = HttpRequest.newBuilder(URI.create(url.trim())).timeout(java.time.Duration.ofSeconds(15)).GET().build();
+                    byte[] b = HTTP.send(r, HttpResponse.BodyHandlers.ofByteArray()).body();
+                    if (b.length < 100 || b.length > 2 * 1024 * 1024) throw new IllegalStateException("bad size");
+                    BufferedImage im = ImageIO.read(new ByteArrayInputStream(b));
+                    if (im == null || im.getWidth() > 2048 || im.getHeight() > 2048) throw new IllegalStateException("not an image");
+                    Files.createDirectories(dir());
+                    Path f = dir().resolve(fileName).normalize();
+                    if (!f.startsWith(dir().normalize())) throw new IllegalStateException("bad name");
+                    Files.write(f, b);
+                    filesT = 0;
+                    status = "Saved " + fileName;
+                    select(fileName);
+                } catch (Throwable ex) { status = "Download failed (" + ex.getClass().getSimpleName() + "). Put the .png in config/nextfam/capes/ instead."; }
+            }, "NextFam-CapeDownload");
+            t.setDaemon(true); t.start();
+        }
 
         static void ensure() {
             String want = NfConfig.cape;
@@ -173,20 +235,41 @@ public final class Cosmetics {
 
     // ---------------- modul ----------------
     static class CapeMod extends Extras.OverlayModule {
-        CapeMod() { super("capemod", "Cape", "Visual", "Wear any cape image on your player (only you see it)"); }
+        CapeMod() { super("capemod", "Cape", "Visual", "Wear any cape: your own PNG, an official Mojang cape, or a texture URL (only you see it)"); }
         @Override public List<ExtraBtn> extraButtons() {
             List<ExtraBtn> l = new ArrayList<>();
-            l.add(new ExtraBtn("NONE (my normal cape)", NfConfig.cape.isEmpty(), () -> CapeManager.select("")));
-            for (String f : CapeManager.files()) l.add(new ExtraBtn(f, f.equals(NfConfig.cape), () -> CapeManager.select(f)));
-            if (CapeManager.files().isEmpty()) l.add(new ExtraBtn("Put .png files in: config/nextfam/capes/", false, () -> {}));
+            if (!CapeManager.status.isEmpty()) l.add(new ExtraBtn(CapeManager.status, false, () -> {}));
+            l.add(new ExtraBtn("NONE (use my normal cape)", NfConfig.cape.isEmpty(), () -> CapeManager.select("")));
+            l.add(new ExtraBtn("IMPORT CAPE FROM URL (copy a https link first)", false,
+                    () -> CapeManager.download("cape_" + Integer.toHexString(MinecraftClient.getInstance().keyboard.getClipboard().hashCode()) + ".png", MinecraftClient.getInstance().keyboard.getClipboard())));
+            for (String[] o : CapeManager.OFFICIAL) {
+                String f = CapeManager.fileFor(o[0]);
+                boolean have = CapeManager.files().contains(f);
+                l.add(new ExtraBtn("Mojang: " + o[0] + (have ? "" : "  (download)"), f.equals(NfConfig.cape),
+                        () -> { if (CapeManager.files().contains(f)) CapeManager.select(f); else CapeManager.download(f, "https://textures.minecraft.net/texture/" + o[1]); }));
+            }
+            for (String f : CapeManager.files()) if (!f.startsWith("mojang_")) l.add(new ExtraBtn(f, f.equals(NfConfig.cape), () -> CapeManager.select(f)));
+            if (CapeManager.files().isEmpty()) l.add(new ExtraBtn("Your own capes go in: config/nextfam/capes/", false, () -> {}));
             return l;
         }
     }
 
+    static class Fullbright extends Extras.OverlayModule {
+        final Setting mode = extra(Setting.choice("mode", "Mode", 0, "Night Vision (effect)", "Gamma (fullbright)"));
+        final Setting level = extra(Setting.num("level", "Gamma Level", 10f, 2f, 15f).step(1f));
+        final Setting key = extra(Setting.choice("key", "Toggle Key", 0, Features.FB_KEYS));
+        Fullbright() { super("fullbright", "Fullbright / Night Vision", "Visual", "See clearly in caves and at night: client-side night vision or maximum gamma"); }
+    }
+
     static class NfLogo extends Extras.OverlayModule {
-        final Setting nametag = extra(Setting.bool("nametag", "Logo on my nametag", true));
+        final Setting nametag = extra(Setting.bool("nametag", "Logo on nametags", true));
         final Setting tab = extra(Setting.bool("tab", "Logo in tab list", true));
-        NfLogo() { super("nflogo", "NextFam Logo Tag", "Visual", "Shows the NextFam logo left of your name (nametag and tab). Other players need a NextFam server to be detected."); }
+        final Setting share = extra(Setting.bool("share", "Share my NextFam status (UUID only)", true));
+        final Setting others = extra(Setting.bool("others", "Show other NextFam users", true));
+        NfLogo() { super("nflogo", "NextFam Logo Tag", "Visual", "Shows the NextFam logo left of the name of players who use NextFam Client (needs internet: ntfy.sh or your own server)"); }
+        @Override public List<ExtraBtn> extraButtons() {
+            return List.of(new ExtraBtn("NextFam users online right now: " + Presence.count(), false, () -> {}));
+        }
     }
 
     static class PingEq extends HudElement {
@@ -250,7 +333,7 @@ public final class Cosmetics {
 
         private void draw(DrawContext ctx, AbstractClientPlayerEntity pl, float tp, double t) {
             Vec3d pos = pl.getLerpedPos(tp);
-            double yaw = Math.toRadians(MathHelper.lerpAngleDegrees(tp, pl.lastBodyYaw, pl.bodyYaw));
+            double yaw = Math.toRadians(MathHelper.lerpAngleDegrees(tp, pl.prevBodyYaw, pl.bodyYaw));
             double bx = Math.sin(yaw), bz = -Math.cos(yaw);           // arah belakang badan
             double rx = -Math.cos(yaw), rz = -Math.sin(yaw);          // kanan pemain
             double[] cp = Proj.camPos();

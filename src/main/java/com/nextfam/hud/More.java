@@ -84,7 +84,7 @@ public final class More {
         m.put("damagetint", Items.REDSTONE_BLOCK); m.put("zoom", Items.SPYGLASS); m.put("customfov", Items.ENDER_EYE);
         m.put("particles", Items.FIREWORK_STAR); m.put("weather", Items.WATER_BUCKET); m.put("freelook", Items.COMPASS);
         m.put("snaplook", Items.ENDER_PEARL); m.put("nopumpkin", Items.CARVED_PUMPKIN); m.put("shulker", Items.SHULKER_BOX);
-        m.put("autogg", Items.WRITABLE_BOOK); m.put("pingeq", Items.NOTE_BLOCK); m.put("wings", Items.ELYTRA); m.put("capemod", Items.WHITE_BANNER); m.put("nflogo", Items.NETHER_STAR); m.put("quickchat", Items.NAME_TAG); m.put("hitcolor", Items.RED_DYE); m.put("anim17", Items.WOODEN_SWORD);
+        m.put("autogg", Items.WRITABLE_BOOK); m.put("pingeq", Items.NOTE_BLOCK); m.put("fullbright", Items.SEA_LANTERN); m.put("wings", Items.ELYTRA); m.put("capemod", Items.WHITE_BANNER); m.put("nflogo", Items.NETHER_STAR); m.put("quickchat", Items.NAME_TAG); m.put("hitcolor", Items.RED_DYE); m.put("anim17", Items.WOODEN_SWORD);
         for (int i = n; i < l.size(); i++) {
             HudElement e = l.get(i);
             e.enabled = false; e.defEnabled = false; e.shown.set(0f);

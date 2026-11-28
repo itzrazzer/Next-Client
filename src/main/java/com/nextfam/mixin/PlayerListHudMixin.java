@@ -1,7 +1,6 @@
 package com.nextfam.mixin;
 
 import com.nextfam.hud.Cosmetics;
-import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.hud.PlayerListHud;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.text.Text;
@@ -16,7 +15,8 @@ public class PlayerListHudMixin {
     private void nextfam$logo(PlayerListEntry entry, CallbackInfoReturnable<Text> cir) {
         if (!Cosmetics.logoTab()) return;
         Text t = cir.getReturnValue();
-        String me = MinecraftClient.getInstance().getSession().getUsername();
-        if (t != null && me != null && t.getString().contains(me)) cir.setReturnValue(Cosmetics.withLogo(t));
+        if (t == null) return;
+        java.util.UUID id = Cosmetics.uuidOf(entry.getProfile());
+        if (Cosmetics.showLogoFor(id)) cir.setReturnValue(Cosmetics.withLogo(t));
     }
 }

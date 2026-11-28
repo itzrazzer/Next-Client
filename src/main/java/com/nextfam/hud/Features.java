@@ -12,6 +12,14 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.decoration.EndCrystalEntity;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.entity.effect.StatusEffectInstance;
+import net.minecraft.entity.effect.StatusEffects;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.registry.Registries;
+import net.minecraft.util.Arm;
+import net.minecraft.util.math.RotationAxis;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.ActionResult;
 import org.lwjgl.glfw.GLFW;
@@ -35,6 +43,62 @@ public final class Features {
     private static boolean persp; private static Perspective oldPersp;
 
     public static boolean on(String id) { HudElement e = HudManager.get(id); return e != null && e.enabled; }
+
+    // ---- tangan orang pertama: ukuran totem + pose blok pedang 1.7 ----
+    public static void adjustHand(MatrixStack m, Arm arm) {
+        var mc = MinecraftClient.getInstance(); var p = mc.player;
+        if (p == null) return;
+        Arm main = mc.options.getMainArm().getValue();
+        ItemStack st = arm == main ? p.getMainHandStack() : p.getOffHandStack();
+        HudElement tt = HudManager.get("totemtweaks");
+        if (tt != null && tt.enabled && st.isOf(Items.TOTEM_OF_UNDYING)) {
+            float s = tt.s("handSize").f;
+            if (Math.abs(s - 1f) > 0.01f) m.scale(s, s, s);
+        }
+        HudElement a = HudManager.get("anim17");
+        if (a != null && a.enabled && a.s("block").b && arm == main && mc.currentScreen == null
+                && mc.options.useKey.isPressed() && !p.isUsingItem() && Registries.ITEM.getId(st.getItem()).getPath().endsWith("_sword")) {
+            float side = arm == Arm.RIGHT ? 1f : -1f;
+            m.translate(side * a.s("bx").f, a.s("by").f, a.s("bz").f);
+            m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(30f * side));
+            m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-80f));
+            m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(60f * side));
+        }
+    }
+
+    // ---- Fullbright / Night Vision ----
+    public static final String[] FB_KEYS = {"None", "Z", "X", "C", "V", "B", "N", "M", "G", "H", "J"};
+    private static final int[] FB_CODES = {0, 90, 88, 67, 86, 66, 78, 77, 71, 72, 74};
+    private static boolean nvApplied, gamApplied, fbKey; private static double oldGamma = 1.0;
+
+    private static void setGamma(MinecraftClient c, double v) {
+        try { ((com.nextfam.mixin.SimpleOptionAccessor) (Object) c.options.getGamma()).nextfam$setValue((Object) Double.valueOf(v)); }
+        catch (Throwable t) { try { c.options.getGamma().setValue(Math.min(1.0, v)); } catch (Throwable ignored) {} }
+    }
+
+    private static void fullbright(MinecraftClient c) {
+        HudElement f = HudManager.get("fullbright");
+        if (f == null) return;
+        int kc = FB_CODES[Math.max(0, Math.min(FB_CODES.length - 1, f.s("key").idx))];
+        boolean down = kc > 0 && c.currentScreen == null && GLFW.glfwGetKey(c.getWindow().getHandle(), kc) == GLFW.GLFW_PRESS;
+        if (down && !fbKey) { f.enabled = !f.enabled; HudManager.saveAll(); }
+        fbKey = down;
+        boolean on = f.enabled; int mode = f.s("mode").idx; var p = c.player;
+        if (on && mode == 0) {
+            var inst = p.getStatusEffect(StatusEffects.NIGHT_VISION);
+            if (inst == null || inst.getDuration() < 2000)
+                p.addStatusEffect(new StatusEffectInstance(StatusEffects.NIGHT_VISION, 987654, 0, true, false, false));
+            nvApplied = true;
+        } else if (nvApplied) {
+            var inst = p.getStatusEffect(StatusEffects.NIGHT_VISION);
+            if (inst != null && inst.getDuration() > 900000) p.removeStatusEffect(StatusEffects.NIGHT_VISION);
+            nvApplied = false;
+        }
+        if (on && mode == 1) {
+            if (!gamApplied) { oldGamma = c.options.getGamma().getValue(); gamApplied = true; }
+            setGamma(c, f.s("level").f);
+        } else if (gamApplied) { setGamma(c, oldGamma); gamApplied = false; }
+    }
 
     public static boolean classicHand() {
         HudElement e = HudManager.get("anim17");
@@ -71,6 +135,8 @@ public final class Features {
         if (c.world == null || c.player == null) { Freelook.mode = 0; HOLD.clear(); return; }
         if (!PENDING.isEmpty()) { for (Entity e : PENDING) e.discard(); PENDING.clear(); }
         holdTick(c);
+        fullbright(c);
+        Presence.tick(c);
         fps(c);
         particles(c);
         view(c);
@@ -200,6 +266,7 @@ public final class Features {
         var o = c.options;
         if (applied) restoreFps(o);
         if (pApplied) { o.getParticles().setValue(pOld); pApplied = false; }
+        if (gamApplied) { setGamma(c, oldGamma); gamApplied = false; }
         if (fovApplied) { o.getFov().setValue(fovOrig); o.getFovEffectScale().setValue(effOrig); fovApplied = false; }
         if (spApplied) { o.getSprintToggled().setValue(spOld); spApplied = false; }
         if (snApplied) { o.getSneakToggled().setValue(snOld); snApplied = false; }

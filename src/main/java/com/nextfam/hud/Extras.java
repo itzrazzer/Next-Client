@@ -132,9 +132,10 @@ public final class Extras {
         final Setting hidePop = extra(Setting.bool("hidePop", "Hide Totem Pop Animation", false));
         final Setting custom = extra(Setting.bool("custom", "Custom Pop Animation", true));
         final Setting size = extra(Setting.num("size", "Pop Size", 1.0f, 0.3f, 2.5f));
+        final Setting handSize = extra(Setting.num("handSize", "Totem Size In Hand", 1.0f, 0.3f, 2.5f));
         final Setting dur = extra(Setting.num("dur", "Pop Duration (seconds)", 1.2f, 0.4f, 3f));
         final ItemStack st = new ItemStack(Items.TOTEM_OF_UNDYING);
-        TotemTweaks() { super("totemtweaks", "Totem Tweaks", "Tweaks", "Resize the totem pop animation (replaces the vanilla pop; needs mixin)"); }
+        TotemTweaks() { super("totemtweaks", "Totem Tweaks", "Tweaks", "Resize the totem in your hand and the pop animation (needs mixin)"); }
         @Override public void worldRender(DrawContext ctx, int sw, int sh, float tp) {
             if (hidePop.b || !custom.b) return;
             long age = System.currentTimeMillis() - Features.totemPopStart;
