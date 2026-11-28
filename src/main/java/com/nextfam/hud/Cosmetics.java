@@ -333,7 +333,7 @@ public final class Cosmetics {
 
         private void draw(DrawContext ctx, AbstractClientPlayerEntity pl, float tp, double t) {
             Vec3d pos = pl.getLerpedPos(tp);
-            double yaw = Math.toRadians(MathHelper.lerpAngleDegrees(tp, pl.prevBodyYaw, pl.bodyYaw));
+            double yaw = Math.toRadians(MathHelper.lerpAngleDegrees(tp, pl.lastBodyYaw, pl.bodyYaw));
             double bx = Math.sin(yaw), bz = -Math.cos(yaw);           // arah belakang badan
             double rx = -Math.cos(yaw), rz = -Math.sin(yaw);          // kanan pemain
             double[] cp = Proj.camPos();
